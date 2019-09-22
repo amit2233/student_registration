@@ -1,0 +1,2 @@
+jsonschema = 3.0.2
+flask-jwt-extended = 3.23.0
