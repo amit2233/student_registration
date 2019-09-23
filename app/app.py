@@ -3,7 +3,7 @@ import json
 from validator import validate_user
 from flask import Flask, jsonify, request
 from flask_pymongo import PyMongo
-from flask_jwt_extended import (create_access_token, create_refresh_token,
+from flask_jwt_extended import (create_access_token,
                                 jwt_required, jwt_refresh_token_required, get_jwt_identity,
                                 JWTManager)
 from flask_bcrypt import Bcrypt
@@ -67,6 +67,7 @@ def login():
          flask_bcrypt.check_password_hash(user['password'],
             data['password']):
         del user['password']
+        del data['password']
         access_token = create_access_token(identity=data)
         return jsonify({'ok': True, 'data': access_token}), 200
     else:
@@ -78,8 +79,13 @@ def results():
     data = request.get_json()
     user = mongo.db.users.find_one({'email': data['email']})
     if user:
-
-        return jsonify({'ok': True, 'data': access_token}), 200
+        data_list = []
+        for std in range(1, user["standard"]):
+            if data["results"][std-1]["standard"] == std:
+                data["results"][std-1]["student"] = user["_id"]
+                data_list.append(data["results"][std-1]) 
+        results = mongo.db.results.insert_many(data_list)
+        return jsonify({'ok': True, 'data': results}), 200
     else:
         return jsonify({'ok': False, 'message': 'invalid username or password'}), 401
 
@@ -89,46 +95,13 @@ def results():
 def previous_results():
     ''' route read user '''
     if request.method == 'GET':
-        current_user = get_jwt_identity()
-        data = mongo.db.results.find({"email": current_user["email"]})
+        token_data = get_jwt_identity()
+        user = mongo.db.users.find_one({'email': token_data['email']})
+        data = mongo.db.results.find({"student": user["_id"]})
         data_list = []
         for result in data:
-          print(result)
           data_list.append(result)
         return jsonify({'ok': True, 'data': data_list}), 200
-
-
-
-
-@app.route('/star', methods=['GET'])
-def get_all_stars():
-  star = mongo.db.stars
-  output = []
-  for s in star.find():
-    output.append({'name' : s['name'], 'distance' : s['distance']})
-  return jsonify({'result' : output})
-
-@app.route('/star/', methods=['GET'])
-def get_one_star(name):
-  star = mongo.db.stars
-  s = star.find_one({'name' : name})
-  if s:
-    output = {'name' : s['name'], 'distance' : s['distance']}
-  else:
-    output = "No such name"
-  return jsonify({'result' : output})
-
-@app.route('/star', methods=['POST'])
-def add_star():
-  print("rt")
-  star = mongo.db.stars
-  print("gh", request.json)
-  name = request.json['name']
-  distance = request.json['distance']
-  star_id = star.insert({'name': name, 'distance': distance})
-  new_star = star.find_one({'_id': star_id })
-  output = {'name' : new_star['name'], 'distance' : new_star['distance']}
-  return jsonify({'result' : output})
 
 if __name__ == '__main__':
     app.run(debug=True)
